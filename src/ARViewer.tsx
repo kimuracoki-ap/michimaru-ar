@@ -16,11 +16,9 @@ export const ARViewer: React.FC = () => {
     container.style.height = "100%";
     wrapperRef.current.appendChild(container);
 
-    const base = import.meta.env.BASE_URL; // dev: "/", prod: "/michimaru-ar/"
-
     const mindarThree = new MindARThree({
       container,
-      imageTargetSrc: `${base}targets/targets.mind`,
+      imageTargetSrc: `/targets/targets.mind`,
       uiLoading: "yes",
       uiScanning: "yes",
       uiError: "yes",
@@ -39,7 +37,7 @@ export const ARViewer: React.FC = () => {
     const geometry = new THREE.PlaneGeometry(0.7, 0.7);
 
     // michimaru.svg をテクスチャとして読み込み
-    const texture = new THREE.TextureLoader().load(`${base}ar/michimaru.svg`);
+    const texture = new THREE.TextureLoader().load(`/ar/michimaru.svg`);
 
     const material = new THREE.MeshBasicMaterial({
       map: texture,

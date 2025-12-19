@@ -1,4 +1,3 @@
-import './App.css'
 import { ARViewer } from './ARViewer'
 
 function App() {

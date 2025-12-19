@@ -13,7 +13,7 @@
     "mind-ar": "^1.2.5",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
-    "three": "^0.152.2"
+    "three": "^0.161.0"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",

@@ -24,7 +24,7 @@ export const ARViewer: React.FC = () => {
       // MindAR 初期化（QRマーカーの .mind ファイルを指定）
       mindarThree = new MindARThree({
         container: containerRef.current!,
-        imageTargetSrc: `${base}/targets/targets.mind`, // 事前に public/targets/qr.mind を配置
+        imageTargetSrc: `${base}targets/targets.mind`, // 事前に public/targets/qr.mind を配置
       });
 
       const result = mindarThree;
@@ -43,7 +43,7 @@ export const ARViewer: React.FC = () => {
       const geometry = new THREE.PlaneGeometry(1, 1);
 
       // public/textures/overlay.png をテクスチャとして読み込み
-      const texture = new THREE.TextureLoader().load(`${base}/ar/michimaru.svg`);
+      const texture = new THREE.TextureLoader().load(`${base}ar/michimaru.svg`);
 
       const material = new THREE.MeshBasicMaterial({
         map: texture,

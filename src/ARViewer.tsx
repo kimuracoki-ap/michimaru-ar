@@ -1,21 +1,22 @@
 // src/ARViewer.tsx
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import * as THREE from "three";
 import { MindARThree } from "mind-ar/dist/mindar-image-three.prod.js";
 
 export const ARViewer: React.FC = () => {
   const wrapperRef = useRef<HTMLDivElement | null>(null);
+  const [overlayHidden, setOverlayHidden] = useState(false); // ← 画面を隠すかどうか
 
   useEffect(() => {
     if (!wrapperRef.current) return;
 
-    // MindAR 用コンテナを作成
+    // ★ ここから下は「カメラが映っていたとき」と同じ構成
     const container = document.createElement("div");
     container.style.width = "100%";
     container.style.height = "100%";
     wrapperRef.current.appendChild(container);
 
-    const base = import.meta.env.BASE_URL; // dev: "/", GitHub Pages: "/michimaru-ar/"
+    const base = import.meta.env.BASE_URL; // dev: "/", prod: "/michimaru-ar/"
 
     const mindarThree = new MindARThree({
       container,
@@ -31,15 +32,14 @@ export const ARViewer: React.FC = () => {
     const light = new THREE.HemisphereLight(0xffffff, 0xbbbbff, 1);
     scene.add(light);
 
-    // 0番ターゲット用の Anchor
+    // 0番ターゲット用 Anchor
     const anchor = mindarThree.addAnchor(0);
 
-    // 平面ジオメトリ（サイズは 1m×1m。大きければ 0.5 などに調整）
-    const geometry = new THREE.PlaneGeometry(1, 1);
+    // 平面ジオメトリ（サイズは必要に応じて調整）
+    const geometry = new THREE.PlaneGeometry(0.7, 0.7);
 
-    // public/ar/overlay.png をテクスチャとして読み込み
-    const textureLoader = new THREE.TextureLoader();
-    const texture = textureLoader.load(`${base}ar/michimaru.svg`);
+    // michimaru.svg をテクスチャとして読み込み
+    const texture = new THREE.TextureLoader().load(`${base}ar/michimaru.svg`);
 
     const material = new THREE.MeshBasicMaterial({
       map: texture,
@@ -48,17 +48,16 @@ export const ARViewer: React.FC = () => {
     });
 
     const plane = new THREE.Mesh(geometry, material);
+    plane.rotation.x = Math.PI / 2 + 0.2;
     anchor.group.add(plane);
 
     const start = async () => {
       try {
         await mindarThree.start();
 
-        // コンテナサイズに合わせる
         const { clientWidth, clientHeight } = container;
         renderer.setSize(clientWidth, clientHeight);
 
-        // 描画ループ
         renderer.setAnimationLoop(() => {
           renderer.render(scene, camera);
         });
@@ -71,7 +70,6 @@ export const ARViewer: React.FC = () => {
 
     start();
 
-    // クリーンアップ
     return () => {
       renderer.setAnimationLoop(null);
       try {
@@ -89,9 +87,50 @@ export const ARViewer: React.FC = () => {
       style={{
         width: "100vw",
         height: "100vh",
+        position: "relative",
         overflow: "hidden",
-        // 背景はカメラが出るので特に指定不要
       }}
-    />
+    >
+      {/* ★ カメラは裏で常に動かしておき、オーバーレイだけ消す */}
+      {!overlayHidden && (
+        <div
+          style={{
+            position: "absolute",
+            inset: 0,
+            background: "rgba(0, 0, 0, 0.95)",
+            zIndex: 10,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            flexDirection: "column",
+          }}
+        >
+          <button
+            onClick={() => setOverlayHidden(true)}
+            style={{
+              padding: "14px 24px",
+              borderRadius: 28,
+              border: "none",
+              fontSize: 18,
+              fontWeight: 600,
+              background: "#ffffff",
+              cursor: "pointer",
+              marginBottom: 12,
+            }}
+          >
+            ARを開始
+          </button>
+          <div
+            style={{
+              color: "#fff",
+              fontSize: 12,
+              opacity: 0.8,
+            }}
+          >
+            カメラへのアクセスを許可してからお使いください。
+          </div>
+        </div>
+      )}
+    </div>
   );
 };

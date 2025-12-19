@@ -41,7 +41,7 @@ export const ARViewer: React.FC = () => {
       const geometry = new THREE.PlaneGeometry(1, 1);
 
       // public/textures/overlay.png をテクスチャとして読み込み
-      const texture = new THREE.TextureLoader().load("/textures/overlay.png");
+      const texture = new THREE.TextureLoader().load("/ar/michimaru.svg");
 
       const material = new THREE.MeshBasicMaterial({
         map: texture,

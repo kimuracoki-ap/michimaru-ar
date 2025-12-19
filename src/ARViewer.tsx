@@ -48,6 +48,7 @@ export const ARViewer: React.FC = () => {
     });
 
     const plane = new THREE.Mesh(geometry, material);
+    plane.rotation.x = Math.PI / 2 + 0.2;
     anchor.group.add(plane);
 
     const start = async () => {

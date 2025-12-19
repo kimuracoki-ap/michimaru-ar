@@ -1,116 +1,97 @@
 // src/ARViewer.tsx
-import { type FC, useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 import * as THREE from "three";
 import { MindARThree } from "mind-ar/dist/mindar-image-three.prod.js";
-import "./ARViewer.css";
 
-type ArStatus = "idle" | "initializing" | "running" | "error";
-
-export const ARViewer: FC = () => {
+export const ARViewer: React.FC = () => {
   const wrapperRef = useRef<HTMLDivElement | null>(null);
-  const [status, setStatus] = useState<ArStatus>("idle");
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   useEffect(() => {
-    if (status !== "initializing") return;
     if (!wrapperRef.current) return;
 
+    // MindAR 用コンテナを作成
+    const container = document.createElement("div");
+    container.style.width = "100%";
+    container.style.height = "100%";
+    wrapperRef.current.appendChild(container);
+
     const base = import.meta.env.BASE_URL; // dev: "/", GitHub Pages: "/michimaru-ar/"
-    let mindarThree: any | null = null;
-    let cancelled = false;
 
-    const run = async () => {
+    const mindarThree = new MindARThree({
+      container,
+      imageTargetSrc: `${base}targets/targets.mind`,
+      uiLoading: "yes",
+      uiScanning: "yes",
+      uiError: "yes",
+    });
+
+    const { renderer, scene, camera } = mindarThree;
+
+    // 環境光
+    const light = new THREE.HemisphereLight(0xffffff, 0xbbbbff, 1);
+    scene.add(light);
+
+    // 0番ターゲット用の Anchor
+    const anchor = mindarThree.addAnchor(0);
+
+    // 平面ジオメトリ（サイズは 1m×1m。大きければ 0.5 などに調整）
+    const geometry = new THREE.PlaneGeometry(1, 1);
+
+    // public/ar/overlay.png をテクスチャとして読み込み
+    const textureLoader = new THREE.TextureLoader();
+    const texture = textureLoader.load(`${base}ar/michimaru.svg`);
+
+    const material = new THREE.MeshBasicMaterial({
+      map: texture,
+      transparent: true,
+      side: THREE.DoubleSide,
+    });
+
+    const plane = new THREE.Mesh(geometry, material);
+    anchor.group.add(plane);
+
+    const start = async () => {
       try {
-        // wrapper配下に MindAR 用の container を作る
-        const container = document.createElement("div");
-        container.style.width = "100%";
-        container.style.height = "100%";
+        await mindarThree.start();
 
-        wrapperRef.current!.appendChild(container);
+        // コンテナサイズに合わせる
+        const { clientWidth, clientHeight } = container;
+        renderer.setSize(clientWidth, clientHeight);
 
-        mindarThree = new MindARThree({
-          container,
-          imageTargetSrc: `${base}targets/targets.mind`,
-          uiScanning: "yes",
-          uiLoading: "yes",
-          uiError: "yes",
-        });
-
-        // とりあえず分かりやすい Plane を 1 枚だけ置く（動作確認用）
-        const { renderer, scene, camera } = mindarThree;
-
-        const light = new THREE.HemisphereLight(0xffffff, 0xbbbbff, 1);
-        scene.add(light);
-
-        const geometry = new THREE.PlaneGeometry(1, 1);
-        const material = new THREE.MeshBasicMaterial({ color: 0xff0000 });
-        const plane = new THREE.Mesh(geometry, material);
-
-        const anchor = mindarThree.addAnchor(0);
-        anchor.group.add(plane);
-
-        const startPromise: Promise<void> = mindarThree.start();
-
-        // レンダリングループ
+        // 描画ループ
         renderer.setAnimationLoop(() => {
-          if (cancelled) return;
           renderer.render(scene, camera);
         });
 
-        await startPromise;
-        if (cancelled) {
-          renderer.setAnimationLoop(null);
-          mindarThree.stop();
-          container.remove();
-          return;
-        }
-
-        // MindAR が <video> を container 内に自動追加する
-        console.log("MindAR started", mindarThree.video);
-        setStatus("running");
+        console.log("MindAR started");
       } catch (e) {
-        console.error("MindAR start error", e);
-        setErrorMessage(
-          e instanceof Error ? e.message : "ARの初期化に失敗しました。"
-        );
-        setStatus("error");
+        console.error("MindAR start failed", e);
       }
     };
 
-    run();
+    start();
 
+    // クリーンアップ
     return () => {
-      cancelled = true;
+      renderer.setAnimationLoop(null);
       try {
-        if (mindarThree) {
-          const { renderer } = mindarThree;
-          renderer.setAnimationLoop(null);
-          mindarThree.stop();
-          // container は wrapperRef.current の中にあるので、まとめて消したければ:
-          // wrapperRef.current!.innerHTML = "";
-        }
+        mindarThree.stop();
       } catch (e) {
-        console.warn("MindAR stop error:", e);
+        console.warn("MindAR stop error", e);
       }
+      container.remove();
     };
-  }, [status]);
-
-  const handleStart = () => {
-    setErrorMessage(null);
-    setStatus("initializing");
-  };
+  }, []);
 
   return (
-    <div className="ar-root">
-      {status !== "running" && (
-        <button className="ar-start-button" onClick={handleStart}>
-          ARを開始
-        </button>
-      )}
-
-      {errorMessage && <div className="ar-error">{errorMessage}</div>}
-
-      <div ref={wrapperRef} className="ar-wrapper" />
-    </div>
+    <div
+      ref={wrapperRef}
+      style={{
+        width: "100vw",
+        height: "100vh",
+        overflow: "hidden",
+        // 背景はカメラが出るので特に指定不要
+      }}
+    />
   );
 };

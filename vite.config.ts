@@ -10,5 +10,5 @@ export default defineConfig({
       },
     }),
   ],
-  base: "/michimaru-ar",
+  base: "/michimaru-ar/",
 })

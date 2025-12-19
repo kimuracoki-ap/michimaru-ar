@@ -1,128 +1,116 @@
 // src/ARViewer.tsx
-import { useEffect, useRef, useState } from "react";
+import { type FC, useEffect, useRef, useState } from "react";
 import * as THREE from "three";
-// MindARThree を three.js 用のビルドから import
-// Vite + npm install の場合、この書き方で使えます
 import { MindARThree } from "mind-ar/dist/mindar-image-three.prod.js";
+import "./ARViewer.css";
 
-export const ARViewer: React.FC = () => {
-  const containerRef = useRef<HTMLDivElement | null>(null);
-  const [started, setStarted] = useState(false);
+type ArStatus = "idle" | "initializing" | "running" | "error";
+
+export const ARViewer: FC = () => {
+  const wrapperRef = useRef<HTMLDivElement | null>(null);
+  const [status, setStatus] = useState<ArStatus>("idle");
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!started || !containerRef.current) return;
+    if (status !== "initializing") return;
+    if (!wrapperRef.current) return;
 
-    let mindarThree: any;
-    let renderer: THREE.WebGLRenderer;
-    let scene: THREE.Scene;
-    let camera: THREE.Camera;
-    let cleanup = false;
+    const base = import.meta.env.BASE_URL; // dev: "/", GitHub Pages: "/michimaru-ar/"
+    let mindarThree: any | null = null;
+    let cancelled = false;
 
-    const start = async () => {
-      const base = import.meta.env.BASE_URL;
-
-      // MindAR 初期化（QRマーカーの .mind ファイルを指定）
-      mindarThree = new MindARThree({
-        container: containerRef.current!,
-        imageTargetSrc: `${base}targets/targets.mind`, // 事前に public/targets/qr.mind を配置
-      });
-
-      const result = mindarThree;
-      renderer = result.renderer;
-      scene = result.scene;
-      camera = result.camera;
-
-      // 環境光
-      const light = new THREE.HemisphereLight(0xffffff, 0xbbbbff, 1);
-      scene.add(light);
-
-      // マーカー（ターゲット画像）起点の Anchor を追加（0番目のターゲット）
-      const anchor = mindarThree.addAnchor(0);
-
-      // 平面ジオメトリ（1m x 1m を想定。必要に応じて調整）
-      const geometry = new THREE.PlaneGeometry(1, 1);
-
-      // public/textures/overlay.png をテクスチャとして読み込み
-      const texture = new THREE.TextureLoader().load(`${base}ar/michimaru.svg`);
-
-      const material = new THREE.MeshBasicMaterial({
-        map: texture,
-        transparent: true,
-      });
-
-      const plane = new THREE.Mesh(geometry, material);
-
-      // Anchor の group に追加 → マーカーに追従して表示される
-      anchor.group.add(plane);
-
-      // AR セッション開始
-      await mindarThree.start();
-
-      // コンテナサイズに合わせる
-      const { clientWidth, clientHeight } = containerRef.current!;
-      renderer.setSize(clientWidth, clientHeight);
-
-      // 描画ループ
-      renderer.setAnimationLoop(() => {
-        if (cleanup) return;
-        renderer.render(scene, camera);
-      });
-    };
-
-    start();
-
-    return () => {
-      cleanup = true;
+    const run = async () => {
       try {
-        if (mindarThree) {
+        // wrapper配下に MindAR 用の container を作る
+        const container = document.createElement("div");
+        container.style.width = "100%";
+        container.style.height = "100%";
+
+        wrapperRef.current!.appendChild(container);
+
+        mindarThree = new MindARThree({
+          container,
+          imageTargetSrc: `${base}targets/targets.mind`,
+          uiScanning: "yes",
+          uiLoading: "yes",
+          uiError: "yes",
+        });
+
+        // とりあえず分かりやすい Plane を 1 枚だけ置く（動作確認用）
+        const { renderer, scene, camera } = mindarThree;
+
+        const light = new THREE.HemisphereLight(0xffffff, 0xbbbbff, 1);
+        scene.add(light);
+
+        const geometry = new THREE.PlaneGeometry(1, 1);
+        const material = new THREE.MeshBasicMaterial({ color: 0xff0000 });
+        const plane = new THREE.Mesh(geometry, material);
+
+        const anchor = mindarThree.addAnchor(0);
+        anchor.group.add(plane);
+
+        const startPromise: Promise<void> = mindarThree.start();
+
+        // レンダリングループ
+        renderer.setAnimationLoop(() => {
+          if (cancelled) return;
+          renderer.render(scene, camera);
+        });
+
+        await startPromise;
+        if (cancelled) {
+          renderer.setAnimationLoop(null);
           mindarThree.stop();
-          mindarThree.renderer.setAnimationLoop(null);
+          container.remove();
+          return;
         }
+
+        // MindAR が <video> を container 内に自動追加する
+        console.log("MindAR started", mindarThree.video);
+        setStatus("running");
       } catch (e) {
-        console.warn("MindAR cleanup error:", e);
+        console.error("MindAR start error", e);
+        setErrorMessage(
+          e instanceof Error ? e.message : "ARの初期化に失敗しました。"
+        );
+        setStatus("error");
       }
     };
-  }, [started]);
+
+    run();
+
+    return () => {
+      cancelled = true;
+      try {
+        if (mindarThree) {
+          const { renderer } = mindarThree;
+          renderer.setAnimationLoop(null);
+          mindarThree.stop();
+          // container は wrapperRef.current の中にあるので、まとめて消したければ:
+          // wrapperRef.current!.innerHTML = "";
+        }
+      } catch (e) {
+        console.warn("MindAR stop error:", e);
+      }
+    };
+  }, [status]);
+
+  const handleStart = () => {
+    setErrorMessage(null);
+    setStatus("initializing");
+  };
 
   return (
-    <div
-      style={{
-        width: "100vw",
-        height: "100vh",
-        position: "relative",
-        overflow: "hidden",
-        backgroundColor: "black",
-      }}
-    >
-      {/* iOS Safari 対策：ユーザー操作からカメラ起動 */}
-      {!started && (
-        <button
-          onClick={() => setStarted(true)}
-          style={{
-            position: "absolute",
-            zIndex: 10,
-            top: "16px",
-            left: "50%",
-            transform: "translateX(-50%)",
-            padding: "12px 20px",
-            borderRadius: 24,
-            border: "none",
-            fontSize: 16,
-            fontWeight: 600,
-            background: "#ffffff",
-          }}
-        >
+    <div className="ar-root">
+      {status !== "running" && (
+        <button className="ar-start-button" onClick={handleStart}>
           ARを開始
         </button>
       )}
 
-      <div
-        ref={containerRef}
-        style={{
-          width: "100%",
-          height: "100%",
-        }}
-      />
+      {errorMessage && <div className="ar-error">{errorMessage}</div>}
+
+      <div ref={wrapperRef} className="ar-wrapper" />
     </div>
   );
 };

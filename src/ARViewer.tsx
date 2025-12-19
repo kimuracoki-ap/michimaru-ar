@@ -1,5 +1,5 @@
 // src/ARViewer.tsx
-import React, { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import * as THREE from "three";
 // MindARThree を three.js 用のビルドから import
 // Vite + npm install の場合、この書き方で使えます
